@@ -112,15 +112,14 @@ class OzonOrdersConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> OzonOrdersOptionsFlow:
-        return OzonOrdersOptionsFlow(config_entry)
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> OzonOrdersOptionsFlow:
+        return OzonOrdersOptionsFlow()
 
 
 class OzonOrdersOptionsFlow(config_entries.OptionsFlow):
     """Options flow — polling interval."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:

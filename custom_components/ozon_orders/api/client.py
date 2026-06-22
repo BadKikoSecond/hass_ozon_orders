@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -83,7 +83,7 @@ class OzonOrdersClient:
         page = await self.get_page(page_url)
         parsed = parse_order_list_page(page)
         return {
-            "fetched_at": datetime.now(UTC).isoformat(),
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
             "source": page_url,
             **parsed,
         }
@@ -93,7 +93,7 @@ class OzonOrdersClient:
         page = await self.get_page(page_url)
         parsed = parse_order_details(page)
         return {
-            "fetched_at": datetime.now(UTC).isoformat(),
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
             "source": page_url,
             **parsed,
         }

@@ -28,8 +28,8 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import OzonOrdersCoordinator
-from .entity import OzonOrderEntityDescription, hub_device_info, order_device_info, sanitize_order_key
-from . import get_coordinator, register_platform_add_entities
+from .entity import hub_device_info, order_device_info, sanitize_order_key
+from .helpers import get_coordinator, register_platform_add_entities
 
 HUB_SENSORS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
@@ -134,10 +134,6 @@ class OzonOrderStatusSensor(CoordinatorEntity[OzonOrdersCoordinator], SensorEnti
         super().__init__(coordinator)
         self._order_key = order_key
         self._attr_unique_id = f"{coordinator.entry.entry_id}_order_{sanitize_order_key(order_key)}_status"
-        self.entity_description = OzonOrderEntityDescription(
-            key="status",
-            order_key=order_key,
-        )
 
     @property
     def _order(self) -> dict[str, Any]:

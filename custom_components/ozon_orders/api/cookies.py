@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -72,7 +72,7 @@ def session_expiry_info(source: str | Path | Mapping[str, Any] | list[Any]) -> d
     session = min(expiries.values())
     days = None
     if session:
-        days = max(0, (session - datetime.now(UTC)).total_seconds() / 86400)
+        days = max(0, (session - datetime.now(timezone.utc)).total_seconds() / 86400)
 
     return {
         "access_token_expires": access,
@@ -95,7 +95,7 @@ def _cookie_expiry_datetime(item: dict[str, Any]) -> datetime | None:
     if not exp:
         return None
     if isinstance(exp, (int, float)):
-        return datetime.fromtimestamp(exp, tz=UTC)
+        return datetime.fromtimestamp(exp, tz=timezone.utc)
     try:
         return datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
     except ValueError:

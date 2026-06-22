@@ -175,7 +175,24 @@ action:
 
 Только `aiohttp` — уже есть в Home Assistant, отдельно ничего ставить не нужно.
 
-### Безопасность
+### «Invalid handler specified» при добавлении
+
+Обычно значит, что **config flow не загрузился** (ошибка импорта), а не что интеграция «сломана» в UI.
+
+1. **Проверь путь установки** — папка должна называться ровно `ozon_orders`:
+   ```
+   /config/custom_components/ozon_orders/manifest.json
+   ```
+   Неправильно: `custom_components/hass_ozon_orders/` (имя репозитория ≠ domain).
+
+2. **Логи HA:** Настройки → Система → Логи → искать `ozon_orders` или `config_flow`.  
+   Типично: `Exception importing custom_components.ozon_orders.config_flow`.
+
+3. **Перезагрузи HA** после копирования/HACS (Настройки → Система → Перезапуск).
+
+4. Обнови интеграцию до **v1.0.1+** (фикс совместимости Python 3.10).
+
+---
 
 Файл cookies = полный доступ к аккаунту Ozon. Храните только в `/config`, не коммитьте в git, ограничьте бэкапы.
 

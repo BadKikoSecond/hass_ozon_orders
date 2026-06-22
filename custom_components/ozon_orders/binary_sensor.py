@@ -15,7 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import OzonOrdersCoordinator
 from .entity import hub_device_info, order_device_info, sanitize_order_key
-from . import get_coordinator, register_platform_add_entities
+from .helpers import get_coordinator, register_platform_add_entities
 
 BinaryKind = Literal["at_pickup", "in_transit"]
 
