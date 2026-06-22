@@ -1,0 +1,54 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ozon Orders",
+        "description": "Подключите личный кабинет покупателя Ozon через cookies.",
+        "data": {
+          "cookies_file": "Файл cookies в /config",
+          "cookies_json": "Или вставьте JSON cookies (перезапишет файл)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удалось подключиться к Ozon",
+      "invalid_auth": "Cookies недействительны или сессия истекла",
+      "invalid_json": "Некорректный JSON",
+      "file_not_found": "Файл cookies не найден в /config",
+      "antibot": "Ozon заблокировал запрос (antibot). Обновите cookies из браузера"
+    },
+    "abort": {
+      "already_configured": "Аккаунт уже подключён"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ozon Orders",
+        "data": {
+          "scan_interval": "Интервал опроса (минуты)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "active_orders": { "name": "Активные заказы" },
+      "at_pickup": { "name": "В пункте выдачи" },
+      "in_transit": { "name": "В пути" },
+      "session_expires": { "name": "Сессия истекает" },
+      "order_status": { "name": "Статус заказа" }
+    },
+    "binary_sensor": {
+      "session_valid": { "name": "Сессия активна" },
+      "order_at_pickup": { "name": "В ПВЗ" },
+      "order_in_transit": { "name": "В пути" }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Обновить заказы",
+      "description": "Принудительно запросить данные с Ozon"
+    }
+  }
+}

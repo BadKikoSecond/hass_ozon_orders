@@ -1,0 +1,54 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ozon Orders",
+        "description": "Connect your Ozon buyer account using browser cookies.",
+        "data": {
+          "cookies_file": "Cookies file in /config",
+          "cookies_json": "Or paste cookies JSON (overwrites file)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Ozon",
+      "invalid_auth": "Invalid or expired cookies",
+      "invalid_json": "Invalid JSON",
+      "file_not_found": "Cookies file not found in /config",
+      "antibot": "Ozon antibot blocked the request — refresh cookies from browser"
+    },
+    "abort": {
+      "already_configured": "Account already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ozon Orders",
+        "data": {
+          "scan_interval": "Polling interval (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "active_orders": { "name": "Active orders" },
+      "at_pickup": { "name": "At pickup point" },
+      "in_transit": { "name": "In transit" },
+      "session_expires": { "name": "Session expires" },
+      "order_status": { "name": "Order status" }
+    },
+    "binary_sensor": {
+      "session_valid": { "name": "Session valid" },
+      "order_at_pickup": { "name": "At pickup" },
+      "order_in_transit": { "name": "In transit" }
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh orders",
+      "description": "Force refresh Ozon order data"
+    }
+  }
+}
