@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 cookies.json
 ozon_cookies.json
+pc-cookie.json
 *.log

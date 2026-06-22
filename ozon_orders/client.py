@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 
-import aiohttp
+from curl_cffi.requests import AsyncSession
 
-from .cookies import CookieJar, cookies_header
+from .cookies import CookieJar
 from .errors import OzonAntibotError, OzonAuthError
 from .parser import parse_order_details, parse_order_list_page
 
+_LOGGER = logging.getLogger(__name__)
+
 BASE_URL = "https://www.ozon.ru"
 ENTRYPOINT = "/api/entrypoint-api.bx/page/json/v2"
+BROWSER_IMPERSONATE = "chrome120"
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -25,6 +29,12 @@ DEFAULT_HEADERS = {
     "Referer": "https://www.ozon.ru/my/orderlist",
     "Origin": "https://www.ozon.ru",
     "X-Requested-With": "XMLHttpRequest",
+    "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Linux"',
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
 }
 
 
@@ -35,18 +45,19 @@ class OzonOrdersClient:
         self,
         cookies: CookieJar,
         *,
-        session: aiohttp.ClientSession | None = None,
+        session: AsyncSession | None = None,
         timeout: float = 30.0,
     ) -> None:
         self._cookies = cookies
         self._session = session
         self._owns_session = session is None
-        self._timeout = aiohttp.ClientTimeout(total=timeout)
+        self._timeout = timeout
+        self._warmed_up = False
 
     async def __aenter__(self) -> OzonOrdersClient:
         if self._session is None:
-            self._session = aiohttp.ClientSession(
-                headers={**DEFAULT_HEADERS, "Cookie": cookies_header(self._cookies)},
+            self._session = AsyncSession(
+                impersonate=BROWSER_IMPERSONATE,
                 timeout=self._timeout,
             )
         return self
@@ -55,28 +66,47 @@ class OzonOrdersClient:
         if self._owns_session and self._session is not None:
             await self._session.close()
 
+    async def _warmup(self) -> None:
+        if self._warmed_up or self._session is None:
+            return
+        try:
+            await self._session.get(
+                f"{BASE_URL}/my/orderlist",
+                cookies=self._cookies,
+                headers=DEFAULT_HEADERS,
+            )
+        except Exception as err:
+            _LOGGER.debug("Ozon warmup request failed: %s", err)
+        self._warmed_up = True
+
     async def get_page(self, page_url: str) -> dict[str, Any]:
         if self._session is None:
             raise RuntimeError("Use async with OzonOrdersClient(...)")
 
+        await self._warmup()
+
         encoded = quote(page_url, safe="")
         url = f"{BASE_URL}{ENTRYPOINT}?url={encoded}"
-        async with self._session.get(url) as response:
-            body = await response.text()
-            if response.status in (401, 403):
-                raise _map_access_error(response.status, body)
-            if response.status != 200:
-                raise OzonAntibotError(f"HTTP {response.status}: {body[:300]}")
+        response = await self._session.get(
+            url,
+            cookies=self._cookies,
+            headers=DEFAULT_HEADERS,
+        )
+        body = response.text
+        if response.status_code in (401, 403):
+            raise _map_access_error(response.status_code, body)
+        if response.status_code != 200:
+            raise OzonAntibotError(f"HTTP {response.status_code}: {body[:300]}")
 
-            content_type = response.headers.get("Content-Type", "")
-            if "json" not in content_type.lower():
-                raise OzonAntibotError("Non-JSON response (likely antibot HTML)")
+        content_type = response.headers.get("Content-Type", "")
+        if "json" not in content_type.lower():
+            raise OzonAntibotError("Non-JSON response (likely antibot HTML)")
 
-            data = await response.json(content_type=None)
-            user = (data.get("userInfo") or {}).get("user") or {}
-            if not user.get("isLoggedIn"):
-                raise OzonAuthError("Ozon reports isLoggedIn=false — refresh cookies")
-            return data
+        data = response.json()
+        user = (data.get("userInfo") or {}).get("user") or {}
+        if not user.get("isLoggedIn"):
+            raise OzonAuthError("Ozon reports isLoggedIn=false — refresh cookies")
+        return data
 
     async def fetch_order_list(self, *, active_only: bool = False) -> dict[str, Any]:
         page_url = "/my/orderlist?selectedTab=active" if active_only else "/my/orderlist"

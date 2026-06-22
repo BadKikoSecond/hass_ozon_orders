@@ -9,7 +9,7 @@
 > **Важно:** Ozon не предоставляет публичный API для покупателей. Интеграция использует тот же внутренний `entrypoint-api`, что и сайт `ozon.ru`, с cookies вашей браузерной сессии. Это может перестать работать без предупреждения.
 
 <p align="center">
-  <img src="custom_components/ozon_orders/logo.png" alt="Ozon" width="120" />
+  <img src="custom_components/ozon_orders/brand/icon.png" alt="Ozon" width="120" />
 </p>
 
 ---
@@ -135,8 +135,8 @@ action:
 
 ### Cookies и antibot
 
-- Запросы идут с HA на `www.ozon.ru` **без браузера** — только cookies + заголовки Chrome.
-- Обычно работает, но Ozon (Variti) может выдать **403 / puzzle** — тогда обновите cookies из браузера, где вы уже прошли проверку.
+- Запросы идут через **curl_cffi** с TLS-отпечатком Chrome — иначе Ozon (Variti) режет контейнер HA.
+- Иногда всё равно нужен **puzzle** — тогда обновите cookies из браузера, где вы уже прошли проверку.
 - С другого IP / VPN сессия может умереть раньше.
 
 ### Срок сессии
@@ -152,7 +152,7 @@ action:
 
 ### Зависимости
 
-Только `aiohttp` — уже есть в Home Assistant, отдельно ничего ставить не нужно.
+`curl_cffi` — ставится автоматически при установке интеграции (HACS pip-install из `manifest.json`).
 
 ### «Invalid handler specified» при добавлении
 

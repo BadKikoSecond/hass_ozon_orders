@@ -109,6 +109,10 @@ def parse_order_details(page: dict[str, Any]) -> dict[str, Any]:
     if total_widget:
         total_price = atom_text((total_widget or {}).get("total", {}).get("right", {}).get("price"))
 
+    _, title_widget = find_widget(states, "titleWithTimer-") or (None, None)
+    order_title = atom_text((title_widget or {}).get("title"))
+    order_date = _parse_order_date(order_title)
+
     order_number = None
     page_url = (page.get("pageInfo") or {}).get("url", "")
     if "order=" in page_url:
@@ -117,6 +121,8 @@ def parse_order_details(page: dict[str, Any]) -> dict[str, Any]:
     return {
         "user": _user_info(page),
         "order_number": order_number,
+        "order_title": order_title,
+        "order_date": order_date,
         "pickup_address": pickup_address,
         "total_price_text": total_price,
         "shipments": shipments,
@@ -175,6 +181,7 @@ def _parse_order_tiles(order_list: dict[str, Any] | None) -> list[dict[str, Any]
         products = ((right.get("products") or {}).get("products")) or []
         payment_status = atom_text((products[0] or {}).get("badgeStatus")) if products else None
         status_blob = _normalize_text(" ".join(filter(None, [status, eta_text, delivery_type])))
+        tile_products = _parse_tile_products(products)
 
         tiles.append(
             {
@@ -192,6 +199,8 @@ def _parse_order_tiles(order_list: dict[str, Any] | None) -> list[dict[str, Any]
                     if (step.get("title") or {}).get("text")
                 ],
                 "products_count": len(products),
+                "tile_products": tile_products,
+                "products": [],
                 "payment_status": payment_status,
                 "detail_url": link,
             }
@@ -218,6 +227,8 @@ def _parse_shipment_widget(widget: dict[str, Any], widget_key: str) -> dict[str,
                     {
                         "title": atom_text((product.get("title") or {}).get("name")),
                         "price_text": atom_text(product.get("price")),
+                        "image_url": _product_image_url(product),
+                        "product_url": (product.get("title") or {}).get("common", {}).get("action", {}).get("link"),
                     }
                 )
 
@@ -245,6 +256,50 @@ def _storage_until(text: str | None) -> str | None:
         return None
     match = _STORAGE_UNTIL_RE.search(text)
     return match.group(1).strip() if match else None
+
+
+def _parse_order_date(order_title: str | None) -> str | None:
+    if not order_title:
+        return None
+    prefix = "Заказ от "
+    if order_title.startswith(prefix):
+        return order_title[len(prefix) :].strip()
+    return order_title.strip()
+
+
+def _parse_tile_products(products: list[Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for product in products:
+        if not isinstance(product, dict):
+            continue
+        items.append(
+            {
+                "image_url": _list_tile_image_url(product),
+                "price_text": atom_text(product.get("price")),
+                "payment_status": atom_text(product.get("badgeStatus")),
+                "caption": atom_text(product.get("caption")),
+            }
+        )
+    return items
+
+
+def _list_tile_image_url(product: dict[str, Any]) -> str | None:
+    image_node = ((product.get("image") or {}).get("productMedia") or {}).get("image") or {}
+    if isinstance(image_node.get("url"), str):
+        return image_node["url"]
+    if isinstance(image_node.get("image"), str):
+        return image_node["image"]
+    return None
+
+
+def _product_image_url(product: dict[str, Any]) -> str | None:
+    picture = (product.get("picture") or {}).get("image") or {}
+    if isinstance(picture.get("image"), str):
+        return picture["image"]
+    nested = picture.get("image") or {}
+    if isinstance(nested, dict) and isinstance(nested.get("url"), str):
+        return nested["url"]
+    return None
 
 
 def _user_info(page: dict[str, Any]) -> dict[str, Any]:

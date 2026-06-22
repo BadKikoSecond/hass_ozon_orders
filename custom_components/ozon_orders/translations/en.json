@@ -3,18 +3,18 @@
     "step": {
       "user": {
         "title": "Ozon Orders",
-        "description": "Paste JSON cookies from ozon.ru (Cookie-Editor / EditThisCookie export). {hint}",
+        "description": "Paste cookies JSON exported from ozon.ru (Cookie-Editor / EditThisCookie). {hint}",
         "data": {
           "cookies": "Cookies (JSON)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to Ozon",
-      "invalid_auth": "Ozon rejected the session — re-export all ozon.ru cookies",
-      "invalid_json": "Invalid JSON — paste the full cookie array",
+      "cannot_connect": "Could not connect to Ozon",
+      "invalid_auth": "Ozon rejected the session. Export all ozon.ru cookies again",
+      "invalid_json": "Invalid JSON — paste the full cookies array",
       "missing_auth_cookies": "Missing __Secure-access-token — export all cookies",
-      "antibot": "Ozon antibot: HA container blocked (not IP). Use a host sidecar"
+      "antibot": "Ozon antibot: refresh cookies from a browser where you are already logged in"
     },
     "abort": {
       "already_configured": "Account already configured"
@@ -36,7 +36,16 @@
       "at_pickup": { "name": "At pickup point" },
       "in_transit": { "name": "In transit" },
       "session_expires": { "name": "Session expires" },
-      "order_status": { "name": "Order status" }
+      "order_status": {
+        "name": "Status",
+        "state_attributes": {
+          "order_number": { "name": "Order number" },
+          "order_date": { "name": "Order date" },
+          "order_title": { "name": "Order title" },
+          "products": { "name": "Products" },
+          "product_titles": { "name": "Product titles" }
+        }
+      }
     },
     "binary_sensor": {
       "session_valid": { "name": "Session valid" },

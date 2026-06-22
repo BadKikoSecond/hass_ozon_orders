@@ -20,9 +20,13 @@ from .const import (
     ATTR_ETA,
     ATTR_FETCHED_AT,
     ATTR_LAST_ERROR,
+    ATTR_ORDER_DATE,
     ATTR_ORDER_NUMBER,
+    ATTR_ORDER_TITLE,
     ATTR_PAYMENT_STATUS,
+    ATTR_PRODUCTS,
     ATTR_PRODUCTS_COUNT,
+    ATTR_PRODUCT_TITLES,
     ATTR_REFRESH_TOKEN_EXPIRES,
     ATTR_STORAGE_UNTIL,
     DOMAIN,
@@ -150,12 +154,18 @@ class OzonOrderStatusSensor(CoordinatorEntity[OzonOrdersCoordinator], SensorEnti
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         order = self._order
+        products = order.get("products") or []
+        product_titles = [item.get("title") for item in products if item.get("title")]
         return {
             ATTR_ORDER_NUMBER: order.get("order_number"),
+            ATTR_ORDER_DATE: order.get("order_date"),
+            ATTR_ORDER_TITLE: order.get("order_title"),
             ATTR_ETA: order.get("eta_text"),
             ATTR_DELIVERY_TYPE: order.get("delivery_type"),
             ATTR_STORAGE_UNTIL: order.get("storage_until"),
             ATTR_PRODUCTS_COUNT: order.get("products_count"),
+            ATTR_PRODUCT_TITLES: product_titles,
+            ATTR_PRODUCTS: products,
             ATTR_PAYMENT_STATUS: order.get("payment_status"),
             ATTR_DETAIL_URL: order.get("detail_url"),
             "is_at_pickup_point": order.get("is_at_pickup_point"),

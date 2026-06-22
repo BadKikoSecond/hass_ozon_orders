@@ -1,4 +1,4 @@
-"""Ozon buyer orders client — cookies + entrypoint API, HACS-friendly (aiohttp only)."""
+"""Ozon buyer orders client — cookies + entrypoint API (curl_cffi browser TLS)."""
 
 from .client import OzonOrdersClient
 from .cookies import load_cookies

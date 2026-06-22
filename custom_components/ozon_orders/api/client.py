@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import logging
-import socket
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
-import aiohttp
-from yarl import URL
+from curl_cffi.requests import AsyncSession
 
 from .cookies import CookieJar
 from .errors import OzonAntibotError, OzonAuthError
@@ -19,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 BASE_URL = "https://www.ozon.ru"
 ENTRYPOINT = "/api/entrypoint-api.bx/page/json/v2"
-OZON_URL = URL(BASE_URL)
+BROWSER_IMPERSONATE = "chrome120"
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -40,18 +38,6 @@ DEFAULT_HEADERS = {
 }
 
 
-def _build_session(cookies: CookieJar, timeout: float) -> aiohttp.ClientSession:
-    jar = aiohttp.CookieJar(unsafe=True)
-    jar.update_cookies(cookies, response_url=OZON_URL)
-    connector = aiohttp.TCPConnector(family=socket.AF_INET)
-    return aiohttp.ClientSession(
-        headers=DEFAULT_HEADERS,
-        cookies=jar,
-        connector=connector,
-        timeout=aiohttp.ClientTimeout(total=timeout),
-    )
-
-
 class OzonOrdersClient:
     """Fetch buyer orders via Ozon entrypoint API using exported cookies."""
 
@@ -59,18 +45,21 @@ class OzonOrdersClient:
         self,
         cookies: CookieJar,
         *,
-        session: aiohttp.ClientSession | None = None,
+        session: AsyncSession | None = None,
         timeout: float = 30.0,
     ) -> None:
         self._cookies = cookies
         self._session = session
         self._owns_session = session is None
-        self._timeout = aiohttp.ClientTimeout(total=timeout)
+        self._timeout = timeout
         self._warmed_up = False
 
     async def __aenter__(self) -> OzonOrdersClient:
         if self._session is None:
-            self._session = _build_session(self._cookies, self._timeout.total or 30.0)
+            self._session = AsyncSession(
+                impersonate=BROWSER_IMPERSONATE,
+                timeout=self._timeout,
+            )
         return self
 
     async def __aexit__(self, *args: object) -> None:
@@ -81,9 +70,12 @@ class OzonOrdersClient:
         if self._warmed_up or self._session is None:
             return
         try:
-            async with self._session.get(f"{BASE_URL}/my/orderlist", allow_redirects=True) as response:
-                await response.text()
-        except aiohttp.ClientError as err:
+            await self._session.get(
+                f"{BASE_URL}/my/orderlist",
+                cookies=self._cookies,
+                headers=DEFAULT_HEADERS,
+            )
+        except Exception as err:
             _LOGGER.debug("Ozon warmup request failed: %s", err)
         self._warmed_up = True
 
@@ -95,30 +87,34 @@ class OzonOrdersClient:
 
         encoded = quote(page_url, safe="")
         url = f"{BASE_URL}{ENTRYPOINT}?url={encoded}"
-        async with self._session.get(url) as response:
-            body = await response.text()
-            if response.status in (401, 403):
-                raise _map_access_error(response.status, body)
-            if response.status != 200:
-                raise OzonAntibotError(f"HTTP {response.status}: {body[:300]}")
+        response = await self._session.get(
+            url,
+            cookies=self._cookies,
+            headers=DEFAULT_HEADERS,
+        )
+        body = response.text
+        if response.status_code in (401, 403):
+            raise _map_access_error(response.status_code, body)
+        if response.status_code != 200:
+            raise OzonAntibotError(f"HTTP {response.status_code}: {body[:300]}")
 
-            content_type = response.headers.get("Content-Type", "")
-            if "json" not in content_type.lower():
-                raise OzonAntibotError("Non-JSON response (likely antibot HTML)")
+        content_type = response.headers.get("Content-Type", "")
+        if "json" not in content_type.lower():
+            raise OzonAntibotError("Non-JSON response (likely antibot HTML)")
 
-            data = await response.json(content_type=None)
-            user = (data.get("userInfo") or {}).get("user") or {}
-            if not user.get("isLoggedIn"):
-                _LOGGER.warning(
-                    "Ozon isLoggedIn=false, userInfo=%s, cookie_names=%s",
-                    user,
-                    list(self._cookies.keys()),
-                )
-                raise OzonAuthError(
-                    "Ozon не видит авторизацию (isLoggedIn=false). "
-                    "Экспортируйте все cookies с ozon.ru из браузера, где вы залогинены."
-                )
-            return data
+        data = response.json()
+        user = (data.get("userInfo") or {}).get("user") or {}
+        if not user.get("isLoggedIn"):
+            _LOGGER.warning(
+                "Ozon isLoggedIn=false, userInfo=%s, cookie_names=%s",
+                user,
+                list(self._cookies.keys()),
+            )
+            raise OzonAuthError(
+                "Ozon не видит авторизацию (isLoggedIn=false). "
+                "Экспортируйте все cookies с ozon.ru из браузера, где вы залогинены."
+            )
+        return data
 
     async def fetch_order_list(self, *, active_only: bool = False) -> dict[str, Any]:
         page_url = "/my/orderlist?selectedTab=active" if active_only else "/my/orderlist"
@@ -158,8 +154,8 @@ def _map_access_error(status: int, body: str) -> OzonAntibotError | OzonAuthErro
     lowered = body.lower()
     if status == 403:
         return OzonAntibotError(
-            "HTTP 403: Ozon antibot (Variti). Cookies с ПК верные, но контейнер HA "
-            "отправляет запрос не как браузер (TLS fingerprint). Нужен sidecar на хосте."
+            "HTTP 403: Ozon antibot (Variti). Обновите cookies из браузера, "
+            "где вы уже прошли проверку."
         )
     if any(marker in lowered for marker in ("variti", "puzzle", "<html", "captcha", "access denied")):
         return OzonAntibotError(f"HTTP {status}: Ozon antibot: {snippet[:200]}")

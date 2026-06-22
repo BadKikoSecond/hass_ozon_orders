@@ -14,7 +14,7 @@
       "invalid_auth": "Ozon не принял сессию. Экспортируйте все cookies с ozon.ru заново",
       "invalid_json": "Некорректный JSON — нужен массив cookies целиком",
       "missing_auth_cookies": "Нет __Secure-access-token — экспортируйте все cookies, не только пару штук",
-      "antibot": "Ozon antibot: запрос из контейнера HA блокируется (не IP). Нужен sidecar на ПК/хосте"
+      "antibot": "Ozon antibot: refresh cookies from a browser where you are already logged in"
     },
     "abort": {
       "already_configured": "Аккаунт уже подключён"
