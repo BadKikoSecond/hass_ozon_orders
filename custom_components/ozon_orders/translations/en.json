@@ -3,18 +3,27 @@
     "step": {
       "user": {
         "title": "Ozon Orders",
-        "description": "Paste cookies JSON exported from ozon.ru (Cookie-Editor / EditThisCookie). {hint}",
+        "description": "Paste cookies JSON exported from ozon.ru (Cookie-Editor / EditThisCookie). {hint}\n\n{relay_hint}",
         "data": {
-          "cookies": "Cookies (JSON)"
+          "cookies": "Cookies (JSON)",
+          "relay_url": "Relay URL (optional)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Ozon Orders",
+        "description": "Update cookies after passing the Ozon challenge in your browser. {hint}\n\n{relay_hint}",
+        "data": {
+          "cookies": "Cookies (JSON)",
+          "relay_url": "Relay URL (optional)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Could not connect to Ozon",
+      "cannot_connect": "Could not connect to Ozon or relay",
       "invalid_auth": "Ozon rejected the session. Export all ozon.ru cookies again",
       "invalid_json": "Invalid JSON — paste the full cookies array",
       "missing_auth_cookies": "Missing __Secure-access-token — export all cookies",
-      "antibot": "Ozon antibot: refresh cookies from a browser where you are already logged in"
+      "antibot": "Ozon antibot / challenge. Pass the check in a desktop browser, refresh cookies, or set a relay URL"
     },
     "abort": {
       "already_configured": "Account already configured"
@@ -25,7 +34,8 @@
       "init": {
         "title": "Ozon Orders",
         "data": {
-          "scan_interval": "Polling interval (minutes)"
+          "scan_interval": "Polling interval (minutes)",
+          "relay_url": "Relay URL (http://PC_IP:18765)"
         }
       }
     }
