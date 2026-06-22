@@ -14,7 +14,7 @@
       "invalid_auth": "Ozon rejected the session — re-export all ozon.ru cookies",
       "invalid_json": "Invalid JSON — paste the full cookie array",
       "missing_auth_cookies": "Missing __Secure-access-token — export all cookies",
-      "antibot": "Ozon antibot blocked the Home Assistant server IP"
+      "antibot": "Ozon antibot: HA container blocked (not IP). Use a host sidecar"
     },
     "abort": {
       "already_configured": "Account already configured"

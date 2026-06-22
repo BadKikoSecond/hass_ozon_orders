@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import logging
+import socket
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
 import aiohttp
+from yarl import URL
 
-from .cookies import CookieJar, cookies_header
+from .cookies import CookieJar
 from .errors import OzonAntibotError, OzonAuthError
 from .parser import parse_order_details, parse_order_list_page
 
@@ -17,6 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 
 BASE_URL = "https://www.ozon.ru"
 ENTRYPOINT = "/api/entrypoint-api.bx/page/json/v2"
+OZON_URL = URL(BASE_URL)
 
 DEFAULT_HEADERS = {
     "User-Agent": (
@@ -37,6 +40,18 @@ DEFAULT_HEADERS = {
 }
 
 
+def _build_session(cookies: CookieJar, timeout: float) -> aiohttp.ClientSession:
+    jar = aiohttp.CookieJar(unsafe=True)
+    jar.update_cookies(cookies, response_url=OZON_URL)
+    connector = aiohttp.TCPConnector(family=socket.AF_INET)
+    return aiohttp.ClientSession(
+        headers=DEFAULT_HEADERS,
+        cookies=jar,
+        connector=connector,
+        timeout=aiohttp.ClientTimeout(total=timeout),
+    )
+
+
 class OzonOrdersClient:
     """Fetch buyer orders via Ozon entrypoint API using exported cookies."""
 
@@ -55,10 +70,7 @@ class OzonOrdersClient:
 
     async def __aenter__(self) -> OzonOrdersClient:
         if self._session is None:
-            self._session = aiohttp.ClientSession(
-                headers={**DEFAULT_HEADERS, "Cookie": cookies_header(self._cookies)},
-                timeout=self._timeout,
-            )
+            self._session = _build_session(self._cookies, self._timeout.total or 30.0)
         return self
 
     async def __aexit__(self, *args: object) -> None:
@@ -140,10 +152,15 @@ class OzonOrdersClient:
 
 
 def _map_access_error(status: int, body: str) -> OzonAntibotError | OzonAuthError:
+    snippet = body[:500].replace("\n", " ")
+    _LOGGER.error("Ozon HTTP %s body: %s", status, snippet)
+
     lowered = body.lower()
-    if any(marker in lowered for marker in ("variti", "puzzle", "<html", "captcha", "access denied")):
+    if status == 403:
         return OzonAntibotError(
-            f"HTTP {status}: Ozon antibot с IP Home Assistant. "
-            "Обновите cookies сразу после входа в браузере на этом же ПК."
+            "HTTP 403: Ozon antibot (Variti). Cookies с ПК верные, но контейнер HA "
+            "отправляет запрос не как браузер (TLS fingerprint). Нужен sidecar на хосте."
         )
-    return OzonAuthError(f"HTTP {status}: сессия отклонена — обновите cookies")
+    if any(marker in lowered for marker in ("variti", "puzzle", "<html", "captcha", "access denied")):
+        return OzonAntibotError(f"HTTP {status}: Ozon antibot: {snippet[:200]}")
+    return OzonAuthError(f"HTTP {status}: сессия отклонена — {snippet[:200]}")
