@@ -57,34 +57,13 @@
 
 ## Настройка cookies
 
-### Способ 1 — файл в `/config` (удобнее обновлять)
+1. Залогиньтесь на [ozon.ru](https://www.ozon.ru) в браузере на ПК
+2. Установите расширение **Cookie-Editor** или **EditThisCookie**
+3. На странице ozon.ru → Export → **JSON** (весь массив целиком)
+4. **Настройки → Устройства и службы → Добавить → Ozon Orders**
+5. Вставьте JSON в поле **Cookies (JSON)** и подтвердите
 
-1. Залогиньтесь на [ozon.ru](https://www.ozon.ru)
-2. Экспортируйте cookies для домена `.ozon.ru` (расширение **EditThisCookie**, **Cookie-Editor** или DevTools)
-3. Сохраните как `/config/ozon_cookies.json`
-
-Форматы JSON:
-
-```json
-[
-  {"name": "__Secure-access-token", "value": "...", "domain": ".ozon.ru"},
-  {"name": "__Secure-refresh-token", "value": "...", "domain": ".ozon.ru"}
-]
-```
-
-или Playwright `storage_state` с полем `"cookies": [...]`.
-
-### Способ 2 — вставить при настройке
-
-В мастере настройки вставьте JSON в поле **cookies** — интеграция запишет его в файл из первого поля (по умолчанию `ozon_cookies.json`).
-
-### Настройка интеграции
-
-**Настройки → Устройства и службы → Добавить интеграцию → Ozon Orders**
-
-После успешной проверки появится устройство **Ozon — {имя}** и отдельные устройства на каждое отправление.
-
-**Параметры:** интервал опроса 5–180 минут (по умолчанию 15).
+Нужны все cookies домена `.ozon.ru`, включая `__Secure-access-token`.
 
 ---
 
@@ -130,7 +109,7 @@ action:
   - service: notify.persistent_notification
     data:
       title: "Ozon Orders"
-      message: "Осталось меньше недели до истечения cookies. Экспортируй новые в /config/ozon_cookies.json"
+      message: "Осталось меньше недели до истечения cookies. Пересоздайте интеграцию с новым JSON."
 ```
 
 ### Сессия отвалилась
@@ -165,7 +144,7 @@ action:
 Сенсор `session_expires` читает `expirationDate` из cookies (`__Secure-access-token` и др.).  
 Это **срок в файле cookies**, не юридическая гарантия Ozon — сервер может разлогинить раньше.
 
-Типичный сценарий: **раз в несколько месяцев / до года** обновить `ozon_cookies.json`.
+Типичный сценарий: **раз в несколько месяцев / до года** обновить cookies (удалить и заново добавить интеграцию).
 
 ### Один заказ — несколько отправлений
 

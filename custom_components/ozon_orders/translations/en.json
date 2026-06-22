@@ -3,19 +3,18 @@
     "step": {
       "user": {
         "title": "Ozon Orders",
-        "description": "Connect your Ozon buyer account using browser cookies.",
+        "description": "Paste JSON cookies from ozon.ru (Cookie-Editor / EditThisCookie export). {hint}",
         "data": {
-          "cookies_file": "Cookies file in /config",
-          "cookies_json": "Or paste cookies JSON (overwrites file)"
+          "cookies": "Cookies (JSON)"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to Ozon",
-      "invalid_auth": "Invalid or expired cookies",
-      "invalid_json": "Invalid JSON",
-      "file_not_found": "Cookies file not found in /config",
-      "antibot": "Ozon antibot blocked the request — refresh cookies from browser"
+      "invalid_auth": "Ozon rejected the session — re-export all ozon.ru cookies",
+      "invalid_json": "Invalid JSON — paste the full cookie array",
+      "missing_auth_cookies": "Missing __Secure-access-token — export all cookies",
+      "antibot": "Ozon antibot blocked the Home Assistant server IP"
     },
     "abort": {
       "already_configured": "Account already configured"

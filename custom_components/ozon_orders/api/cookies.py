@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -15,11 +16,42 @@ _AUTH_COOKIE_NAMES = (
     "__Secure-user-id",
 )
 
-_OZON_SUFFIXES = (".ozon.ru", "ozon.ru", "www.ozon.ru")
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
+
+
+def parse_cookies_input(text: str) -> Any:
+    """Parse cookies pasted from browser extensions or DevTools."""
+    cleaned = _CODE_FENCE_RE.sub("", text.strip()).strip()
+    if not cleaned:
+        raise ValueError("empty cookies input")
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    if "=" in cleaned and not cleaned.startswith(("[", "{")):
+        jar: CookieJar = {}
+        for part in cleaned.split(";"):
+            part = part.strip()
+            if not part or "=" not in part:
+                continue
+            name, _, value = part.partition("=")
+            name = name.strip()
+            value = value.strip()
+            if name:
+                jar[name] = value
+        if jar:
+            return jar
+
+    raise ValueError("unsupported cookies format")
 
 
 def load_cookies(source: str | Path | Mapping[str, Any] | list[Any]) -> CookieJar:
     """Normalize cookies to ``{name: value}`` for the ``Cookie`` header."""
+    if isinstance(source, str) and not Path(source).exists():
+        source = parse_cookies_input(source)
+
     data = _read_source(source)
     jar: CookieJar = {}
 
@@ -39,6 +71,12 @@ def load_cookies(source: str | Path | Mapping[str, Any] | list[Any]) -> CookieJa
     if not jar:
         raise ValueError("No cookies found in JSON")
 
+    if not any(name in jar for name in _AUTH_COOKIE_NAMES):
+        raise ValueError(
+            "Missing Ozon auth cookies (__Secure-access-token). "
+            "Export all cookies for .ozon.ru from a logged-in browser."
+        )
+
     return jar
 
 
@@ -48,6 +86,9 @@ def cookies_header(jar: CookieJar) -> str:
 
 def session_expiry_info(source: str | Path | Mapping[str, Any] | list[Any]) -> dict[str, Any]:
     """Return auth cookie expiry timestamps parsed from the raw export."""
+    if isinstance(source, str) and not Path(source).exists():
+        source = parse_cookies_input(source)
+
     data = _read_source(source)
     items = _cookie_items(data)
     expiries: dict[str, datetime] = {}
@@ -105,8 +146,10 @@ def _cookie_expiry_datetime(item: dict[str, Any]) -> datetime | None:
 def _read_source(source: str | Path | Mapping[str, Any] | list[Any]) -> Any:
     if isinstance(source, (str, Path)):
         path = Path(source)
-        with path.open(encoding="utf-8") as fh:
-            return json.load(fh)
+        if path.is_file():
+            with path.open(encoding="utf-8") as fh:
+                return json.load(fh)
+        return parse_cookies_input(str(source))
     return source
 
 
@@ -118,12 +161,4 @@ def _merge_cookie_list(jar: CookieJar, items: list[Any]) -> None:
         value = item.get("value")
         if not name or value is None:
             continue
-        domain = str(item.get("domain", ""))
-        if domain and not _domain_matches(domain):
-            continue
         jar[str(name)] = str(value)
-
-
-def _domain_matches(domain: str) -> bool:
-    domain = domain.lstrip(".")
-    return any(domain == suffix.lstrip(".") or domain.endswith(suffix) for suffix in _OZON_SUFFIXES)

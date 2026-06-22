@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api.client import OzonOrdersClient
 from .api.cookies import load_cookies, session_expiry_info
 from .api.errors import OzonAntibotError, OzonAuthError, OzonOrdersError
-from .const import CONF_COOKIES_FILE, DEFAULT_COOKIES_FILE, DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import CONF_COOKIES, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,20 +34,20 @@ class OzonOrdersCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.last_error: str | None = None
 
     @property
-    def cookies_path(self) -> str:
-        filename = self.entry.data.get(CONF_COOKIES_FILE, DEFAULT_COOKIES_FILE)
-        return self.hass.config.path(filename)
+    def cookies_raw(self) -> str:
+        return self.entry.data[CONF_COOKIES]
 
     async def _async_update_data(self) -> dict[str, Any]:
-        path = self.cookies_path
+        cookies_raw = self.cookies_raw
         try:
-            cookies = await self.hass.async_add_executor_job(load_cookies, path)
-            session = await self.hass.async_add_executor_job(session_expiry_info, path)
+            cookies = await self.hass.async_add_executor_job(load_cookies, cookies_raw)
+            session = await self.hass.async_add_executor_job(session_expiry_info, cookies_raw)
             async with OzonOrdersClient(cookies) as client:
                 payload = await client.fetch_order_list(active_only=True)
         except (OzonAuthError, OzonAntibotError, OzonOrdersError, OSError, ValueError) as err:
             self.connection_ok = False
             self.last_error = str(err)
+            _LOGGER.error("Ozon update failed: %s", err)
             raise UpdateFailed(str(err)) from err
 
         self.connection_ok = True

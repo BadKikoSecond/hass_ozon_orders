@@ -3,10 +3,8 @@
 DOMAIN = "ozon_orders"
 MANUFACTURER = "Ozon"
 
-CONF_COOKIES_FILE = "cookies_file"
-CONF_COOKIES_JSON = "cookies_json"
+CONF_COOKIES = "cookies"
 
-DEFAULT_COOKIES_FILE = "ozon_cookies.json"
 DEFAULT_SCAN_INTERVAL = 15
 
 MIN_SCAN_INTERVAL = 5

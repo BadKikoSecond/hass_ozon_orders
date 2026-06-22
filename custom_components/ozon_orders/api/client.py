@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
@@ -11,6 +12,8 @@ import aiohttp
 from .cookies import CookieJar, cookies_header
 from .errors import OzonAntibotError, OzonAuthError
 from .parser import parse_order_details, parse_order_list_page
+
+_LOGGER = logging.getLogger(__name__)
 
 BASE_URL = "https://www.ozon.ru"
 ENTRYPOINT = "/api/entrypoint-api.bx/page/json/v2"
@@ -25,6 +28,12 @@ DEFAULT_HEADERS = {
     "Referer": "https://www.ozon.ru/my/orderlist",
     "Origin": "https://www.ozon.ru",
     "X-Requested-With": "XMLHttpRequest",
+    "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Linux"',
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
 }
 
 
@@ -42,6 +51,7 @@ class OzonOrdersClient:
         self._session = session
         self._owns_session = session is None
         self._timeout = aiohttp.ClientTimeout(total=timeout)
+        self._warmed_up = False
 
     async def __aenter__(self) -> OzonOrdersClient:
         if self._session is None:
@@ -55,9 +65,21 @@ class OzonOrdersClient:
         if self._owns_session and self._session is not None:
             await self._session.close()
 
+    async def _warmup(self) -> None:
+        if self._warmed_up or self._session is None:
+            return
+        try:
+            async with self._session.get(f"{BASE_URL}/my/orderlist", allow_redirects=True) as response:
+                await response.text()
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Ozon warmup request failed: %s", err)
+        self._warmed_up = True
+
     async def get_page(self, page_url: str) -> dict[str, Any]:
         if self._session is None:
             raise RuntimeError("Use async with OzonOrdersClient(...)")
+
+        await self._warmup()
 
         encoded = quote(page_url, safe="")
         url = f"{BASE_URL}{ENTRYPOINT}?url={encoded}"
@@ -75,7 +97,15 @@ class OzonOrdersClient:
             data = await response.json(content_type=None)
             user = (data.get("userInfo") or {}).get("user") or {}
             if not user.get("isLoggedIn"):
-                raise OzonAuthError("Ozon reports isLoggedIn=false — refresh cookies")
+                _LOGGER.warning(
+                    "Ozon isLoggedIn=false, userInfo=%s, cookie_names=%s",
+                    user,
+                    list(self._cookies.keys()),
+                )
+                raise OzonAuthError(
+                    "Ozon не видит авторизацию (isLoggedIn=false). "
+                    "Экспортируйте все cookies с ozon.ru из браузера, где вы залогинены."
+                )
             return data
 
     async def fetch_order_list(self, *, active_only: bool = False) -> dict[str, Any]:
@@ -111,8 +141,9 @@ class OzonOrdersClient:
 
 def _map_access_error(status: int, body: str) -> OzonAntibotError | OzonAuthError:
     lowered = body.lower()
-    if "variti" in lowered or "puzzle" in lowered or "<html" in lowered:
+    if any(marker in lowered for marker in ("variti", "puzzle", "<html", "captcha", "access denied")):
         return OzonAntibotError(
-            f"HTTP {status}: antibot challenge — cookies alone are not enough, use browser keep-alive"
+            f"HTTP {status}: Ozon antibot с IP Home Assistant. "
+            "Обновите cookies сразу после входа в браузере на этом же ПК."
         )
-    return OzonAuthError(f"HTTP {status}: session rejected — update cookies")
+    return OzonAuthError(f"HTTP {status}: сессия отклонена — обновите cookies")

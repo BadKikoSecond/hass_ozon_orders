@@ -4,22 +4,18 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
 
 from .api.client import OzonOrdersClient
-from .api.cookies import load_cookies
+from .api.cookies import load_cookies, parse_cookies_input
 from .api.errors import OzonAntibotError, OzonAuthError, OzonOrdersError
 from .const import (
-    CONF_COOKIES_FILE,
-    CONF_COOKIES_JSON,
-    DEFAULT_COOKIES_FILE,
+    CONF_COOKIES,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MAX_SCAN_INTERVAL,
@@ -28,12 +24,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-STEP_USER_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_COOKIES_FILE, default=DEFAULT_COOKIES_FILE): str,
-        vol.Optional(CONF_COOKIES_JSON): str,
-    }
-)
+STEP_USER_SCHEMA = vol.Schema({vol.Required(CONF_COOKIES): str})
 
 STEP_OPTIONS_SCHEMA = vol.Schema(
     {
@@ -45,20 +36,8 @@ STEP_OPTIONS_SCHEMA = vol.Schema(
 )
 
 
-class CannotConnect(HomeAssistantError):
-    """Failed to connect to Ozon."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Invalid or expired cookies."""
-
-
-class AntibotBlocked(HomeAssistantError):
-    """Ozon antibot blocked the request."""
-
-
-async def _validate_connection(hass: HomeAssistant, cookies_path: str) -> dict[str, Any]:
-    cookies = await hass.async_add_executor_job(load_cookies, cookies_path)
+async def _validate_connection(hass: HomeAssistant, cookies_raw: str) -> dict[str, Any]:
+    cookies = await hass.async_add_executor_job(load_cookies, cookies_raw)
     async with OzonOrdersClient(cookies) as client:
         return await client.fetch_order_list(active_only=True)
 
@@ -66,48 +45,48 @@ async def _validate_connection(hass: HomeAssistant, cookies_path: str) -> dict[s
 class OzonOrdersConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Ozon Orders."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            cookies_file = user_input[CONF_COOKIES_FILE].strip() or DEFAULT_COOKIES_FILE
-            cookies_path = self.hass.config.path(cookies_file)
-            pasted = (user_input.get(CONF_COOKIES_JSON) or "").strip()
-
+            pasted = (user_input.get(CONF_COOKIES) or "").strip()
             try:
-                if pasted:
-                    raw = json.loads(pasted)
-                    await self.hass.async_add_executor_job(load_cookies, raw)
-                    await self.hass.async_add_executor_job(_write_cookies_file, cookies_path, pasted)
-                elif not Path(cookies_path).is_file():
-                    errors["base"] = "file_not_found"
-                    raise ValueError("cookies file missing")
+                parsed = await self.hass.async_add_executor_job(parse_cookies_input, pasted)
+                cookies_raw = json.dumps(parsed, ensure_ascii=False)
+                await self.hass.async_add_executor_job(load_cookies, cookies_raw)
 
-                result = await _validate_connection(self.hass, cookies_path)
+                result = await _validate_connection(self.hass, cookies_raw)
                 await self.async_set_unique_id(str(result["user"].get("user_id")))
                 self._abort_if_unique_id_configured()
 
                 first_name = result["user"].get("first_name") or "Ozon"
                 return self.async_create_entry(
                     title=f"Ozon — {first_name}",
-                    data={CONF_COOKIES_FILE: cookies_file},
+                    data={CONF_COOKIES: cookies_raw},
                     options={"scan_interval": DEFAULT_SCAN_INTERVAL},
                 )
-            except json.JSONDecodeError:
-                errors["base"] = "invalid_json"
-            except OzonAuthError:
+            except ValueError as err:
+                _LOGGER.error("Cookie parse error: %s", err)
+                errors["base"] = "invalid_json" if "format" in str(err).lower() or "json" in str(err).lower() else "missing_auth_cookies"
+            except OzonAuthError as err:
+                _LOGGER.error("Ozon auth failed during setup: %s", err)
                 errors["base"] = "invalid_auth"
-            except OzonAntibotError:
+            except OzonAntibotError as err:
+                _LOGGER.error("Ozon antibot during setup: %s", err)
                 errors["base"] = "antibot"
-            except (OzonOrdersError, OSError, ValueError):
+            except (OzonOrdersError, OSError) as err:
+                _LOGGER.error("Ozon connection failed during setup: %s", err)
                 errors["base"] = "cannot_connect"
 
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
+            description_placeholders={
+                "hint": "Cookie-Editor / EditThisCookie → Export → JSON, весь массив целиком",
+            },
         )
 
     @staticmethod
@@ -132,7 +111,3 @@ class OzonOrdersOptionsFlow(config_entries.OptionsFlow):
                 {"scan_interval": self.config_entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)},
             ),
         )
-
-
-def _write_cookies_file(path: str, content: str) -> None:
-    Path(path).write_text(content, encoding="utf-8")

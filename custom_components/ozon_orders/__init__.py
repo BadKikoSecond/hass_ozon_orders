@@ -3,17 +3,38 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, SERVICE_REFRESH
+from .const import CONF_COOKIES, DOMAIN, SERVICE_REFRESH
 from .coordinator import OzonOrdersCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate v1 file-based cookies to v2 pasted cookies storage."""
+    if config_entry.version != 1:
+        return True
+
+    cookies_file = config_entry.data.get("cookies_file", "ozon_cookies.json")
+    path = hass.config.path(cookies_file)
+    if not Path(path).is_file():
+        _LOGGER.error("Migration failed: cookies file %s not found", path)
+        return False
+
+    cookies_raw = Path(path).read_text(encoding="utf-8")
+    hass.config_entries.async_update_entry(
+        config_entry,
+        data={CONF_COOKIES: cookies_raw},
+        version=2,
+    )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
