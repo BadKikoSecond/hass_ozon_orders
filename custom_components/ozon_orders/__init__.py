@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
@@ -13,6 +14,7 @@ from .const import CONF_COOKIES, DOMAIN, SERVICE_REFRESH
 from .coordinator import OzonOrdersCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+_UTC = timezone.utc
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
 
@@ -52,9 +54,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     if not hass.services.has_service(DOMAIN, SERVICE_REFRESH):
+        last_manual_refresh: dict[str, datetime] = {}
+
         async def _handle_refresh(_call) -> None:
-            for entry_data in hass.data[DOMAIN].values():
-                await entry_data["coordinator"].async_request_refresh()
+            now = datetime.now(_UTC)
+            min_gap = timedelta(minutes=coordinator.manual_refresh_minutes)
+            for entry_id, entry_data in hass.data[DOMAIN].items():
+                coordinator: OzonOrdersCoordinator = entry_data["coordinator"]
+                if coordinator.backoff_until and now < coordinator.backoff_until:
+                    _LOGGER.warning(
+                        "Ozon refresh skipped for %s: antibot backoff until %s",
+                        entry_id,
+                        coordinator.backoff_until.isoformat(timespec="minutes"),
+                    )
+                    continue
+                previous = last_manual_refresh.get(entry_id)
+                if previous and now - previous < min_gap:
+                    _LOGGER.warning(
+                        "Ozon refresh skipped for %s: wait %s minutes between manual refreshes",
+                        entry_id,
+                        coordinator.manual_refresh_minutes,
+                    )
+                    continue
+                last_manual_refresh[entry_id] = now
+                await coordinator.async_request_refresh()
 
         hass.services.async_register(DOMAIN, SERVICE_REFRESH, _handle_refresh)
 
@@ -62,6 +85,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if entry.entry_id in hass.data.get(DOMAIN, {}):
+        await hass.data[DOMAIN][entry.entry_id]["coordinator"].async_shutdown()
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok

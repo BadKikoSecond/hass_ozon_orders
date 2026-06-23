@@ -54,6 +54,10 @@ class OzonOrdersClient:
         self._timeout = timeout
         self._warmed_up = False
 
+    def set_cookies(self, cookies: CookieJar) -> None:
+        """Replace cookies on a long-lived session."""
+        self._cookies = cookies
+
     async def __aenter__(self) -> OzonOrdersClient:
         if self._session is None:
             self._session = AsyncSession(

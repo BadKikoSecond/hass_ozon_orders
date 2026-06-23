@@ -2,19 +2,32 @@
   "config": {
     "step": {
       "user": {
-        "title": "Ozon Orders",
-        "description": "Вставьте JSON cookies с сайта ozon.ru (экспорт из Cookie-Editor / EditThisCookie). {hint}",
+        "title": "Ozon — cookies",
+        "description": "Экспорт cookies с ozon.ru (лучше Firefox + Cookie-Editor).\n\n1. Откройте https://www.ozon.ru/my/orderlist и дождитесь загрузки списка заказов\n2. Подождите 15–20 секунд на странице\n3. Cookie-Editor → Export → JSON (весь массив)\n4. В JSON должны быть abt_data и __Secure-access-token (обычно ≥ 12 cookies)\n\nChrome часто отдаёт урезанный экспорт без abt_data — тогда Ozon вернёт antibot 403.",
         "data": {
           "cookies": "Cookies (JSON)"
+        }
+      },
+      "sync": {
+        "title": "Ozon — синхронизация и antibot",
+        "description": "Рекомендуемые значения снижают риск блокировки Variti. Статус и ETA заказов берутся из списка; детали (названия товаров) — отдельные запросы.",
+        "data": {
+          "scan_interval": "Интервал опроса списка заказов (минуты)",
+          "fetch_details": "Запрашивать страницы деталей заказов",
+          "details_ttl_hours": "Повтор деталей не чаще (часы)",
+          "details_batch_size": "Деталей за один цикл опроса (0–3)",
+          "request_delay_sec": "Пауза между запросами деталей (сек)",
+          "manual_refresh_minutes": "Минимум между ручными refresh (минуты)"
         }
       }
     },
     "error": {
       "cannot_connect": "Не удалось подключиться к Ozon",
-      "invalid_auth": "Ozon не принял сессию. Экспортируйте все cookies с ozon.ru заново",
+      "invalid_auth": "Ozon не принял сессию. Экспортируйте cookies заново с /my/orderlist",
       "invalid_json": "Некорректный JSON — нужен массив cookies целиком",
-      "missing_auth_cookies": "Нет __Secure-access-token — экспортируйте все cookies, не только пару штук",
-      "antibot": "Ozon antibot: обновите cookies из браузера, где вы уже залогинены"
+      "missing_auth_cookies": "Нет __Secure-access-token — экспортируйте все cookies",
+      "missing_antibot_cookies": "Нет abt_data — откройте /my/orderlist, подождите 15–20 сек, экспортируйте из Firefox",
+      "antibot": "Ozon antibot (403). Обновите cookies или увеличьте интервал опроса"
     },
     "abort": {
       "already_configured": "Аккаунт уже подключён"
@@ -23,9 +36,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "Ozon Orders",
+        "title": "Ozon — синхронизация и antibot",
+        "description": "Интервал 30 мин и 1 деталь за цикл — оптимальный баланс. При 403 интеграция автоматически уходит в backoff.",
         "data": {
-          "scan_interval": "Интервал опроса (минуты)"
+          "scan_interval": "Интервал опроса списка заказов (минуты)",
+          "fetch_details": "Запрашивать страницы деталей заказов",
+          "details_ttl_hours": "Повтор деталей не чаще (часы)",
+          "details_batch_size": "Деталей за один цикл опроса (0–3)",
+          "request_delay_sec": "Пауза между запросами деталей (сек)",
+          "manual_refresh_minutes": "Минимум между ручными refresh (минуты)"
         }
       }
     }
@@ -36,7 +55,8 @@
         "name": "Активные заказы",
         "state_attributes": {
           "fetched_at": { "name": "Обновлено" },
-          "last_error": { "name": "Последняя ошибка" }
+          "last_error": { "name": "Последняя ошибка" },
+          "backoff_until": { "name": "Antibot backoff до" }
         }
       },
       "at_pickup": { "name": "В пункте выдачи" },

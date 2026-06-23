@@ -2,19 +2,32 @@
   "config": {
     "step": {
       "user": {
-        "title": "Ozon Orders",
-        "description": "Paste cookies JSON exported from ozon.ru (Cookie-Editor / EditThisCookie). {hint}",
+        "title": "Ozon — cookies",
+        "description": "Export cookies from ozon.ru (Firefox + Cookie-Editor works best).\n\n1. Open https://www.ozon.ru/my/orderlist and wait for the order list\n2. Stay on the page for 15–20 seconds\n3. Cookie-Editor → Export → JSON (full array)\n4. JSON must include abt_data and __Secure-access-token (usually ≥ 12 cookies)\n\nChrome often exports a trimmed set without abt_data — Ozon then returns antibot 403.",
         "data": {
           "cookies": "Cookies (JSON)"
+        }
+      },
+      "sync": {
+        "title": "Ozon — sync & antibot",
+        "description": "Recommended defaults reduce Variti blocks. Order status and ETA come from the list; product titles need extra detail requests.",
+        "data": {
+          "scan_interval": "Order list poll interval (minutes)",
+          "fetch_details": "Fetch order detail pages",
+          "details_ttl_hours": "Re-fetch details at most every (hours)",
+          "details_batch_size": "Detail requests per poll cycle (0–3)",
+          "request_delay_sec": "Delay between detail requests (sec)",
+          "manual_refresh_minutes": "Minimum between manual refresh (minutes)"
         }
       }
     },
     "error": {
       "cannot_connect": "Could not connect to Ozon",
-      "invalid_auth": "Ozon rejected the session. Export all ozon.ru cookies again",
+      "invalid_auth": "Ozon rejected the session. Re-export cookies from /my/orderlist",
       "invalid_json": "Invalid JSON — paste the full cookies array",
       "missing_auth_cookies": "Missing __Secure-access-token — export all cookies",
-      "antibot": "Ozon antibot: refresh cookies from a browser where you are already logged in"
+      "missing_antibot_cookies": "Missing abt_data — open /my/orderlist, wait 15–20 sec, export from Firefox",
+      "antibot": "Ozon antibot (403). Refresh cookies or increase the poll interval"
     },
     "abort": {
       "already_configured": "Account already configured"
@@ -23,9 +36,15 @@
   "options": {
     "step": {
       "init": {
-        "title": "Ozon Orders",
+        "title": "Ozon — sync & antibot",
+        "description": "30 min interval and 1 detail per cycle is a good default. On 403 the integration enters automatic backoff.",
         "data": {
-          "scan_interval": "Polling interval (minutes)"
+          "scan_interval": "Order list poll interval (minutes)",
+          "fetch_details": "Fetch order detail pages",
+          "details_ttl_hours": "Re-fetch details at most every (hours)",
+          "details_batch_size": "Detail requests per poll cycle (0–3)",
+          "request_delay_sec": "Delay between detail requests (sec)",
+          "manual_refresh_minutes": "Minimum between manual refresh (minutes)"
         }
       }
     }

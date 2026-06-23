@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_ACCESS_TOKEN_EXPIRES,
+    ATTR_BACKOFF_UNTIL,
     ATTR_DAYS_REMAINING,
     ATTR_DELIVERY_TYPE,
     ATTR_DETAIL_URL,
@@ -110,10 +111,13 @@ class OzonHubSensor(CoordinatorEntity[OzonOrdersCoordinator], SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         if self.entity_description.key != "session_expires":
             if self.entity_description.key == "active_orders":
-                return {
+                attrs: dict[str, Any] = {
                     ATTR_FETCHED_AT: (self.coordinator.data or {}).get("fetched_at"),
                     ATTR_LAST_ERROR: self.coordinator.last_error,
                 }
+                if self.coordinator.backoff_until:
+                    attrs[ATTR_BACKOFF_UNTIL] = self.coordinator.backoff_until.isoformat()
+                return attrs
             return None
 
         session = (self.coordinator.data or {}).get("session") or {}
