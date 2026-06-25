@@ -5,3 +5,8 @@ cookies.json
 ozon_cookies.json
 pc-cookie.json
 *.log
+research/
+scripts/
+.cursor/
+.vscode/
+cookie.json
