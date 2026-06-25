@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_ACCESS_TOKEN_EXPIRES,
+    ATTR_ACCESS_TOKEN_PART6,
     ATTR_BACKOFF_UNTIL,
     ATTR_DAYS_REMAINING,
     ATTR_DELIVERY_TYPE,
@@ -21,6 +22,8 @@ from .const import (
     ATTR_ETA,
     ATTR_FETCHED_AT,
     ATTR_LAST_ERROR,
+    ATTR_MINUTES_REMAINING,
+    ATTR_OPERATIONAL_EXPIRES,
     ATTR_ORDER_DATE,
     ATTR_ORDER_NUMBER,
     ATTR_ORDER_TITLE,
@@ -123,7 +126,11 @@ class OzonHubSensor(CoordinatorEntity[OzonOrdersCoordinator], SensorEntity):
         session = (self.coordinator.data or {}).get("session") or {}
         attrs: dict[str, Any] = {
             ATTR_DAYS_REMAINING: session.get("days_remaining"),
+            ATTR_MINUTES_REMAINING: session.get("minutes_remaining"),
+            ATTR_ACCESS_TOKEN_PART6: session.get("access_token_part6"),
         }
+        if session.get("operational_expires"):
+            attrs[ATTR_OPERATIONAL_EXPIRES] = session["operational_expires"].isoformat()
         if session.get("access_token_expires"):
             attrs[ATTR_ACCESS_TOKEN_EXPIRES] = session["access_token_expires"].isoformat()
         if session.get("refresh_token_expires"):

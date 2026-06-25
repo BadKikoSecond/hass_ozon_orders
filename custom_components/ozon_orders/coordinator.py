@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api.client import OzonOrdersClient
-from .api.cookies import load_cookies, session_expiry_info
+from .api.cookies import load_cookies, session_info_from_jar
 from .api.enrich import enrich_order_from_details
 from .api.errors import OzonAntibotError, OzonAuthError, OzonOrdersError
 from .const import (
@@ -75,6 +75,7 @@ class OzonOrdersCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._client: OzonOrdersClient | None = None
         self._details_cache: dict[str, _DetailsCacheEntry] = {}
         self._antibot_strikes = 0
+        self._config_token_fp: str | None = None
 
     @property
     def cookies_raw(self) -> str:
@@ -108,10 +109,13 @@ class OzonOrdersCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cookies_raw = self.cookies_raw
         try:
             cookies = await self.hass.async_add_executor_job(load_cookies, cookies_raw)
-            session = await self.hass.async_add_executor_job(session_expiry_info, cookies_raw)
             client = await self._ensure_client(cookies)
+            await client.maybe_refresh_session()
             payload = await client.fetch_order_list(active_only=True)
             orders = await self._build_orders(client, payload.get("orders") or [])
+            session = await self.hass.async_add_executor_job(
+                session_info_from_jar, client.cookies, cookies_raw
+            )
         except OzonAntibotError as err:
             self._register_antibot_backoff(now)
             self.connection_ok = False
@@ -138,11 +142,14 @@ class OzonOrdersCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
     async def _ensure_client(self, cookies: dict[str, str]) -> OzonOrdersClient:
+        token_fp = cookies.get("__Secure-access-token", "")[:48]
         if self._client is None:
             self._client = OzonOrdersClient(cookies)
             await self._client.__aenter__()
-        else:
-            self._client.set_cookies(cookies)
+            self._config_token_fp = token_fp
+        elif token_fp != self._config_token_fp:
+            self._client.merge_config_cookies(cookies)
+            self._config_token_fp = token_fp
         return self._client
 
     def _register_antibot_backoff(self, now: datetime) -> None:

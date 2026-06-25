@@ -16,6 +16,10 @@ _AUTH_COOKIE_NAMES = (
     "__Secure-user-id",
 )
 
+_SET_COOKIE_SKIP = frozenset(
+    {"expires", "max-age", "path", "domain", "samesite", "secure", "httponly"}
+)
+
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
 
 
@@ -82,6 +86,75 @@ def load_cookies(source: str | Path | Mapping[str, Any] | list[Any]) -> CookieJa
 
 def cookies_header(jar: CookieJar) -> str:
     return "; ".join(f"{name}={value}" for name, value in jar.items())
+
+
+def parse_set_cookie_header(header: str | None) -> CookieJar:
+    """Parse ``Set-Cookie`` response header into a cookie jar fragment."""
+    out: CookieJar = {}
+    if not header:
+        return out
+    chunks = re.split(r", (?=[^;]+=)", header)
+    for chunk in chunks:
+        match = re.match(r"([^=]+)=([^;]*)", chunk.strip())
+        if not match:
+            continue
+        name, value = match.group(1), match.group(2)
+        if name.lower() in _SET_COOKIE_SKIP:
+            continue
+        out[name] = value
+    return out
+
+
+def access_token_part6(jar: CookieJar) -> str | None:
+    token = jar.get("__Secure-access-token", "")
+    parts = token.split(".")
+    return parts[6] if len(parts) > 6 else None
+
+
+def access_token_operational_expiry(jar: CookieJar) -> datetime | None:
+    part6 = access_token_part6(jar)
+    if part6 and len(part6) == 14 and part6.isdigit():
+        return datetime.strptime(part6, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+    return None
+
+
+def session_info_from_jar(
+    jar: CookieJar,
+    raw_source: str | Path | Mapping[str, Any] | list[Any] | None = None,
+) -> dict[str, Any]:
+    """Session metadata: operational part[6] expiry plus browser export dates."""
+    browser = (
+        session_expiry_info(raw_source)
+        if raw_source is not None
+        else {
+            "access_token_expires": None,
+            "refresh_token_expires": None,
+            "session_expires": None,
+            "days_remaining": None,
+        }
+    )
+    operational = access_token_operational_expiry(jar)
+    now = datetime.now(timezone.utc)
+    minutes_remaining = None
+    if operational:
+        minutes_remaining = int((operational - now).total_seconds() // 60)
+
+    primary = operational or browser.get("session_expires")
+    days_remaining = browser.get("days_remaining")
+    if minutes_remaining is not None:
+        days_remaining = round(max(0, minutes_remaining) / 1440, 2)
+
+    return {
+        **browser,
+        "session_expires": primary,
+        "operational_expires": operational,
+        "minutes_remaining": minutes_remaining,
+        "access_token_part6": access_token_part6(jar),
+        "days_remaining": days_remaining,
+        "token_operational_expired": (
+            minutes_remaining is not None and minutes_remaining <= 0
+        ),
+    }
 
 
 def session_expiry_info(source: str | Path | Mapping[str, Any] | list[Any]) -> dict[str, Any]:
