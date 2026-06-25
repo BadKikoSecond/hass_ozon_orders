@@ -152,6 +152,17 @@ class OzonOrdersCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._config_token_fp = token_fp
         return self._client
 
+    def _set_update_interval(self, interval: timedelta) -> None:
+        """Reschedule polling; ``async_set_update_interval`` is not on all HA versions."""
+        async_set = getattr(self, "async_set_update_interval", None)
+        if callable(async_set):
+            async_set(interval)
+            return
+        self.update_interval = interval
+        schedule = getattr(self, "_schedule_refresh", None)
+        if callable(schedule):
+            schedule()
+
     def _register_antibot_backoff(self, now: datetime) -> None:
         self._antibot_strikes += 1
         backoff_minutes = min(
@@ -159,8 +170,7 @@ class OzonOrdersCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ANTIBOT_BACKOFF_MAX_MINUTES,
         )
         self.backoff_until = now + timedelta(minutes=backoff_minutes)
-        backoff_interval = timedelta(minutes=backoff_minutes)
-        self.async_set_update_interval(backoff_interval)
+        self._set_update_interval(timedelta(minutes=backoff_minutes))
         _LOGGER.warning(
             "Ozon antibot strike %s — pausing polls for %s minutes",
             self._antibot_strikes,
@@ -173,7 +183,7 @@ class OzonOrdersCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._antibot_strikes = 0
         self.backoff_until = None
         if self.update_interval != self._normal_interval:
-            self.async_set_update_interval(self._normal_interval)
+            self._set_update_interval(self._normal_interval)
 
     async def _build_orders(
         self,
